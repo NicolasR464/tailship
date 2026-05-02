@@ -1,0 +1,21 @@
+# ===== Headscale / Network =====
+HEADSCALE_URL="http://192.....:8080"
+
+# ===== SSH =====
+REMOTE_USER="user"
+SSH_KEY="$HOME/.ssh/your_ssh_key"
+
+# ===== Remote paths =====
+REMOTE_FRONT_DIR="/c/Users/user/Documents/..."
+REMOTE_BACK_DIR="/c/Users/user/Documents/..."
+
+# Windows-specific (used only if present)
+REMOTE_BASH="/c/Program Files/Git/bin/bash.exe"
+REMOTE_KIOSK_BAT=""
+
+# ===== Local paths =====
+LOCAL_ENV_DIR="./ENVIRONMENTS_VARIABLES"
+
+# ===== Defaults =====
+DEFAULT_FRONT_BRANCH="main"
+DEFAULT_BACK_BRANCH="main"
