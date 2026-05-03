@@ -17,6 +17,7 @@ RED=$'\033[38;5;196m'
 GRAY=$'\033[38;5;245m'
 GREEN=$'\033[38;5;46m'
 
+# VISUAL INTRO #
 print_intro() {
   clear
 
@@ -49,6 +50,14 @@ print_intro() {
   echo
 }
 
+# HELPER FUNCTIONS #
+section() {
+  echo
+  echo -e "${PURPLE}${BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+  echo -e "${WHITE}${BOLD}$1${RESET}"
+  echo -e "${PURPLE}${BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+}
+
 fail() {
   echo -e "${RED}❌ $1${RESET}"
 }
@@ -64,11 +73,86 @@ info() {
 print_intro
 
 # GET CONFIG FILE VALUES #
-CONFIG_FILE="./tailship.config"
+CONFIG_DIR="./CONFIGS"
 
-if [[ ! -f "$CONFIG_FILE" ]]; then
-  fail "Missing config file: $CONFIG_FILE"
-  exit 1
+is_example_config() {
+  local file_name
+  file_name="$(basename "$1")"
+
+  [[ "$file_name" == "example.config" || "$file_name" == *.example.config ]]
+}
+
+select_config_file() {
+  local configs=()
+  local names=()
+  local i=1
+
+  if [[ ! -d "$CONFIG_DIR" ]]; then
+    fail "Config directory not found: $CONFIG_DIR"
+    exit 1
+  fi
+
+  while IFS= read -r file; do
+    if is_example_config "$file"; then
+      continue
+    fi
+
+    configs+=("$file")
+    names+=("$(basename "$file" .config)")
+  done < <(find "$CONFIG_DIR" -maxdepth 1 -type f -name "*.config" | sort)
+
+  if [[ ${#configs[@]} -eq 0 ]]; then
+    fail "No usable config files found in $CONFIG_DIR"
+    echo -e "${GRAY}Example configs like demo.config are ignored.${RESET}"
+    exit 1
+  fi
+
+  section "Select your config"
+
+  for name in "${names[@]}"; do
+    echo "$i) $name"
+    ((i++))
+  done
+
+  echo
+  read -p "Select config: " choice
+
+  if ! [[ "$choice" =~ ^[0-9]+$ ]]; then
+    fail "Invalid selection. Pick a number."
+    exit 1
+  fi
+
+  local index=$((choice - 1))
+  CONFIG_FILE="${configs[$index]}"
+
+  if [[ -z "$CONFIG_FILE" ]]; then
+    fail "Invalid selection. Pick a number in the select range."
+    exit 1
+  fi
+
+  success "Using config: $(basename "$CONFIG_FILE" .config)"
+}
+
+if [[ -n "$1" ]]; then
+  if [[ "$1" == *.config ]]; then
+    CONFIG_FILE="$CONFIG_DIR/$1"
+  else
+    CONFIG_FILE="$CONFIG_DIR/$1.config"
+  fi
+
+  if [[ ! -f "$CONFIG_FILE" ]]; then
+    fail "Config not found: $CONFIG_FILE"
+    exit 1
+  fi
+
+  if is_example_config "$CONFIG_FILE"; then
+    fail "$(basename "$CONFIG_FILE") is an example config and cannot be used."
+    exit 1
+  fi
+
+  success "Using config: $(basename "$CONFIG_FILE" .config)"
+else
+  select_config_file
 fi
 
 source "$CONFIG_FILE"
@@ -90,35 +174,14 @@ for var in "${required_vars[@]}"; do
   fi
 done
 
-# CHECK TAILNET CONNECTION #
-info "Checking the tailnet connectivity..."
-
-if ! command -v tailscale >/dev/null 2>&1; then
-  fail "Tailscale is not installed."
-  exit 1
-fi
-    
-if ! curl -fsS "$HEADSCALE_URL/health" >/dev/null 2>&1; then
-  fail "Headscale server is not reachable at $HEADSCALE_URL."
-  echo -e "${GRAY}Check that the Headscale server is running and reachable from this machine.${RESET}"
-  echo -e "${GRAY}Diagnostics you can run:${RESET}"
-  echo -e "${CYAN}  1) Check Headscale API:${RESET} curl -v $HEADSCALE_URL/health"
-  echo -e "${CYAN}  2) Check Tailscale client:${RESET} tailscale status"
-  echo -e "${CYAN}  3) On the remote Headscale server:${RESET} docker ps | grep headscale"
-  exit 1
-fi
-
-if ! tailscale status >/tmp/remote_launcher_tailscale_status 2>/tmp/remote_launcher_tailscale_error; then
-  fail "Local Tailscale client is not available."
-  echo -e "${RED}$(cat /tmp/remote_launcher_tailscale_error)${RESET}"
-  echo -e "${GRAY}Start the local Tailscale daemon, then run this script again.${RESET}"
-  exit 1
-fi
-
-success "Tailscale is running."
-echo ""
-
+# GET TAILNET MACHINES #
 echo "Fetching tailnet machines..."
+
+if grep -qi "logged out" /tmp/remote_launcher_tailscale_status; then
+  fail "Local Tailscale client is logged out."
+  echo -e "${GRAY}Connect to your Headscale tailnet, then run Tailship again.${RESET}"
+  exit 1
+fi
 
 nodes=()
 names=()
@@ -131,7 +194,12 @@ while read -r line; do
   ip=$(echo "$line" | awk '{print $1}')
   name=$(echo "$line" | awk '{print $2}')
 
-  [[ -z "$ip" || -z "$name" ]] && continue
+  # Only accept real tailnet IP lines
+  if ! [[ "$ip" =~ ^100\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+    continue
+  fi
+
+  [[ -z "$name" ]] && continue
 
   nodes+=("$ip")
   names+=("$name")
@@ -146,7 +214,11 @@ if [[ ${#nodes[@]} -eq 0 ]]; then
 fi
 
 echo ""
-read -p "Select target machine: " choice
+
+# MACHINE SELECTION #
+section "Select target machine"
+
+read -p "Machines in tailnet: " choice
 
 index=$((choice - 1))
 REMOTE_HOST="${nodes[$index]}"
@@ -159,9 +231,10 @@ fi
 
 success "Selected: $REMOTE_NAME ($REMOTE_HOST)"
 echo ""
-echo "$GREEN" "🚀 Ready to launch deployments!"
+echo -e "${GREEN}🚀 Ready to launch deployments!${RESET}"
 
-section "3. Environment files"
+# ENVIRONMENT FILES SELECTION #
+section "Environment files"
 
 echo "1) Copy local env files when available"
 echo "2) Keep remote env files"
@@ -195,7 +268,7 @@ else
   info "Keeping all remote environment files."
 fi
 
-section "4. Deployment scope"
+section "Deployment scope"
 
 echo "1) Frontend + backend"
 echo "2) Frontend only"
@@ -223,7 +296,8 @@ case "$scope_choice" in
     ;;
 esac
 
-section "5. Branch selection"
+# GIT BRANCH SELECTION #
+section "Branch selection"
 
 select_branch() {
   local label="$1"
@@ -266,7 +340,7 @@ else
   warn "Skipping backend."
 fi
 
-section "6. Deployment summary"
+section "Deployment summary"
 
 echo "Target machine : $REMOTE_NAME ($REMOTE_HOST)"
 echo "Scope          : $(
@@ -290,7 +364,8 @@ if [[ "$confirm" != "y" && "$confirm" != "Y" ]]; then
   exit 0
 fi
 
-section "7. Remote deployment"
+# REMOTE DEPLOYMENT #
+section "Remote deployment"
 
 ssh -i "$SSH_KEY" -o IdentitiesOnly=yes "$REMOTE_USER@$REMOTE_HOST" \
 "DEPLOY_FRONT='$DEPLOY_FRONT' DEPLOY_BACK='$DEPLOY_BACK' FRONT_BRANCH='$FRONT_BRANCH' BACK_BRANCH='$BACK_BRANCH' REMOTE_FRONT_DIR='$REMOTE_FRONT_DIR' REMOTE_BACK_DIR='$REMOTE_BACK_DIR' REMOTE_KIOSK_BAT='$REMOTE_KIOSK_BAT' \"$REMOTE_BASH\" -lc '
@@ -372,5 +447,5 @@ cmd.exe /c \"\$REMOTE_KIOSK_BAT\"
 echo \"Deployment complete.\"
 '"
 
-section "8. Done"
+section "Done"
 success "Deployment completed successfully."

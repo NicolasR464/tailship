@@ -26,12 +26,14 @@ It lets you:
 
 ## 📁 Project structure
 
+```
 .
 ├── tailship.sh
 ├── tailship.config
 └── ENVIRONMENTS_VARIABLES/
     ├── .env         # backend
     └── .env.local   # frontend
+```
 
 ---
 
