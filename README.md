@@ -35,7 +35,7 @@ It lets you:
 │   ├── .env
 │   └── .env.local
 └── src/
-    ├── ui.sh                 # colors, intro, section, fail/success
+    ├── ui.sh                 # colors, intro, section, fail/success helpers
     ├── config.sh             # config selection + validation
     ├── tailnet.sh            # tailscale/headscale checks + node selection
     ├── env.sh                # env file copy logic
@@ -48,22 +48,28 @@ It lets you:
 ## ⚙️ Configuration
 
 Edit `your_file.config` (in ./CONFIGS):
+
 ```
-HEADSCALE\_URL="<http://192....:8080>"
-REMOTE\_USER="user"
-SSH\_KEY="$HOME/.ssh/your\_ssh\_key"
-REMOTE\_FRONT\_DIR="/c/Users/.../front"
-REMOTE\_BACK\_DIR="/c/Users/.../back"
-REMOTE\_BASH="/c/Program Files/Git/bin/bash.exe"
-REMOTE\_KIOSK\_BAT=""
-LOCAL\_ENV\_DIR="./ENVIRONMENTS\_VARIABLES"
-``` 
+HEADSCALE_URL="<http://192....:8080>"
+REMOTE_USER="user"
+SSH_KEY="$HOME/.ssh/your\_ssh\_key"
+REMOTE_FRONT_DIR="/c/Users/.../front"
+REMOTE_BACK_DIR="/c/Users/.../back"
+REMOTE_BASH="/c/Program Files/Git/bin/bash.exe"
+REMOTE_KIOSK_BAT=""
+LOCAL_ENV_DIR="./ENVIRONMENTS_VARIABLES"
+```
+
 ***
 
 ## 🚀 Usage
 
+- Add execution rights:
 ```sh
-chmod +x tailship
+chmod +x ./tailship
+```
+- Run script: 
+```sh
 ./tailship
 ```
 
